@@ -18,3 +18,5 @@ printf("%lu %lu %lu %hhu %d %hhu %d \r\n", pPkt->src_addr,dex_num_decoder(pPkt->
 The sdcc compiler and wixel development tools + sdk can run fine on the Raspberry Pi. So it
 is possible to develop everything directly on the Pi without needing to unplug the wixel 
 which aids prototyping speed.
+
+Script is provided "AS IS"
