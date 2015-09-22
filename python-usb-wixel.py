@@ -20,28 +20,42 @@
 # shell cmd to emulate client: 
 # echo -e '{"numberOfRecords":1,"version":1}\n' | nc -w 3 127.0.0.1 50005
 
+# If you have more than one device you can use the remoteHosts list below to consolidate all of
+# them to a single ip address
+
 import json
+import logging
 import socket
 import sys
 import time
 import os
-from thread import *
-
+import grp
+from urlparse import urlparse
+import threading
+import signal
 import serial
- 
-HOST = ''   # All
-PORT = 50005 # xdrip standard port
 
+HOST = ''  # All interfaces
+PORT = 50005  # xdrip standard port
+
+# Set a list of remote hosts in the format "192.168.1.50:50005", ... to consolidate
+# multiple remote usb wixels or parakeet webservices to a single instance
+# the script will poll the others for the latest data every 10 seconds.
+
+remoteHosts = []
 
 # output template
 
-mydata = { "TransmitterId":"0","_id":1,"CaptureDateTime":0,"RelativeTime":0,"ReceivedSignalStrength":0,"RawValue":0,"TransmissionId":0,"BatteryLife":0,"UploadAttempts":0,"Uploaded":0,"UploaderBatteryLife":0,"FilteredValue":0 }
+
+mydata = {"TransmitterId": "0", "_id": 1, "CaptureDateTime": 0, "RelativeTime": 0, "ReceivedSignalStrength": 0,
+		  "RawValue": 0, "TransmissionId": 0, "BatteryLife": 0, "UploadAttempts": 0, "Uploaded": 0,
+		  "UploaderBatteryLife": 0, "FilteredValue": 0}
 
 
 # threads
 
-def serialthread(dummy):
-	print "entering serial loop"
+def serialThread(dummy):
+	print "entering serial loop - waiting for data from wixel"
 	global mydata
 	while 1:
 		try:
@@ -51,37 +65,155 @@ def serialthread(dummy):
 			# more complex code might be needed if the pi has other
 			# ACM type devices.
 
-			if (os.path.exists("/dev/ttyACM0")):
+			if os.path.exists("/dev/ttyACM0"):
 				ser = serial.Serial('/dev/ttyACM0', 9600)
-			if (os.path.exists("/dev/ttyACM1")):
-				ser = serial.Serial('/dev/ttyACM1', 9600)
+			else:
+				if os.path.exists("/dev/ttyACM1"):
+					ser = serial.Serial('/dev/ttyACM1', 9600)
+				else:
+					logger.error("Could not find any /dev/ttyACMx device")
+					time.sleep(30)
 
-			serial_line = ser.readline()
-		
+			try:
+				serial_line = ser.readline()
+
+
 				# debug print what we received
-			print serial_line 
-		
-			# simple space delimited data records
-			datax = serial_line.split(" ")
-		
-			# update dictionary - no sanity checking here
+				print serial_line
+				logger.info("Serial line: " + serial_line.strip())
 
-			mydata['CaptureDateTime']=str(int(time.time()))+"000"
-			mydata['RelativeTime']="0"
-			mydata['TransmitterId']=datax[0]
-			mydata['RawValue']=datax[1]
-			mydata['FilteredValue']=datax[2]
-			mydata['BatteryLife']=datax[3]
-			mydata['ReceivedSignalStrength']=datax[4]
-			mydata['TransmissionId']=datax[5]
 
-		except serial.serialutil.SerialException,e:
-			print "Serial exception ",e
+				# simple space delimited data records
+				datax = serial_line.split(" ")
+
+				if datax[0] == "\n":
+					print "Detected loss of serial sync - restarting"
+					logger.warning("Serial line error: " + serial_line)
+					break
+
+				# update dictionary - no sanity checking here
+
+				mydata['CaptureDateTime'] = str(int(time.time())) + "000"
+				mydata['RelativeTime'] = "0"
+				mydata['TransmitterId'] = datax[0]
+				mydata['RawValue'] = datax[1]
+				mydata['FilteredValue'] = datax[2]
+				mydata['BatteryLife'] = datax[3]
+				mydata['ReceivedSignalStrength'] = datax[4]
+				mydata['TransmissionId'] = datax[5]
+			except Exception, e:
+				print "Exception: ",e
+
+		except serial.serialutil.SerialException, e:
+			print "Serial exception ", e
 			time.sleep(1)
-			
-		ser.close() 
-		time.sleep(6) 
 
+		try:
+			ser.close()
+		except Exception, e:
+			print "Serial close exception",e
+
+		time.sleep(6)
+
+# socket thread
+
+def clientThread(connlocal):
+	try:
+		connlocal.settimeout(10)
+		while True:
+			data = connlocal.recv(1024)
+			reply = ''
+			if not data:
+				break
+			decoded = json.loads(data)
+			print json.dumps(decoded, sort_keys=True, indent=4)
+
+			mydata['RelativeTime'] = str((int(time.time()) * 1000) - int(mydata['CaptureDateTime']))
+
+			if mydata['RawValue'] != 0:
+				reply = reply + json.dumps(mydata) + "\n\n"
+			else:
+				print "we do not have any data to send yet"
+
+			print reply
+
+			connlocal.sendall(reply)
+		connlocal.close()
+
+	except Exception,e:
+		print "Exception in clientThread: ",e
+
+
+
+def consolidationThread():
+	global mydata
+	global remoteHosts
+	print "Starting consolidationThread"
+	while True:
+		for host in remoteHosts:
+			try:
+
+				host = "//"+host # must be cleaner way to do this
+				remote_address = (urlparse(host).hostname,urlparse(host).port)
+				#print "Trying: ",remote_address
+				sock = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+				sock.settimeout(5) 	# could be longer if not on local network
+
+				sock.connect(remote_address)
+
+				sock.sendall("{\"numberOfRecords\":1,\"version\":1}\n")
+
+				data = sock.recv(1024)
+
+				decoded_data = json.loads(data)
+				if int(decoded_data['RelativeTime']) < ((int(time.time()) * 1000) - int(mydata['CaptureDateTime'])):
+
+					#print "Received NEWER: ",data
+					print "NEWEST FROM: ",remote_address
+					mydata = decoded_data
+
+				sock.close()
+
+			except Exception, e:
+				print e,remote_address
+
+
+
+		time.sleep(10)
+
+
+# threads end
+
+# MAIN
+
+# some init
+
+if os.getuid() == 0:
+	print "Dropping root"
+	os.setgid(1000) # make sure this user is in the dialout group or setgid to dialout
+	try:
+		os.setgid(grp.getgrnam("dialout").gr_gid)
+	except:
+		print "Couldn't find the dialout group to use"
+
+	os.setuid(1000)
+	print "Dropped to user: ", os.getuid()
+	if os.getuid() == 0:
+		print "Cannot drop root - exit!"
+		sys.exit()
+
+logger = logging.getLogger('python-usb-wixel')
+hdlr = logging.FileHandler('/tmp/python-usb-wixel.log')
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+hdlr.setFormatter(formatter)
+logger.addHandler(hdlr)
+
+# choose your logging level as required
+
+logger.setLevel(logging.INFO)
+# logger.setLevel(logging.WARNING)
+
+logger.info("Startup")
 
 
 # Create socket
@@ -90,54 +222,35 @@ s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
 print 'Socket created'
- 
+
 # Bind socket to local host and port
 
 try:
-    s.bind((HOST, PORT))
+	s.bind((HOST, PORT))
 except socket.error as msg:
-    print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-    sys.exit()
-     
- 
+	print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+	sys.exit()
+
 s.listen(10)
 
-start_new_thread(serialthread,("",))
+threading.Thread(target=serialThread,args=("",)).start()
+
+if len(remoteHosts)>0:
+	t=threading.Thread(target=consolidationThread,args=()).start()
 
 
-# socket thread
- 
-def clientthread(conn):
-
-    while True:
-		data = conn.recv(1024)
-		reply = ''
-		if not data: 
-			break
-		decoded = json.loads(data)     
-		print json.dumps(decoded,sort_keys=True,indent=4)
-		
-		mydata['RelativeTime']=str((int(time.time())*1000)-int(mydata['CaptureDateTime']))
-
-		if (mydata['RawValue']!=0):
-			reply = reply + json.dumps(mydata) + "\n\n"
-		else:
-			print "we do not have any data to send yet"
-		
-		print reply
-
-		conn.sendall(reply)
-    conn.close()
-
-# thread end
- 
-# main busy loop 
+# main busy loop
 # wait for connections and start a thread
+try:
+	print "Waiting for connections"
 
-while 1:
-    conn, addr = s.accept()
-    print 'Connected with ' + addr[0] + ':' + str(addr[1])
-     
-    start_new_thread(clientthread ,(conn,))
- 
-s.close()
+	while 1:
+		conn, addr = s.accept()
+		print 'Connected with ' + addr[0] + ':' + str(addr[1])
+
+		threading.Thread(target=clientThread,args=(conn,)).start()
+	s.close()
+
+except KeyboardInterrupt:
+	print "Shutting down"
+	os.kill(os.getpid(),signal.SIGKILL)
