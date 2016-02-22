@@ -87,6 +87,7 @@ if (os.path.isfile(config_path)):
 	PORT = config.getint('main', 'PORT')
 	remoteHosts = config.get('main', 'remoteHosts').strip()
 	parakeet_url = config.get('main', 'parakeet_url').strip()
+	parakeet_passcode = config.get('main', 'parakeet_passcode').strip()
 	try:
 		use_raspberry_pi_serial_port = config.getboolean('main', 'use_raspberry_pi_internal_serial_port')
 	except:
@@ -228,11 +229,11 @@ def consolidationThread():
 				data = sock.recv(1024)
 
 				decoded_data = json.loads(data)
-				if int(decoded_data['RelativeTime']) < ((int(time.time()) * 1000) - int(mydata['CaptureDateTime'])):
+				if (int(decoded_data['RelativeTime'])+100) < ((int(time.time()) * 1000) - int(mydata['CaptureDateTime'])):
 					# print "Received NEWER: ",data
 					print "NEWEST FROM: ", remote_address
 					mydata = decoded_data
-					parakeet_upload()
+					parakeet_upload(ts=((int(time.time()) * 1000) - int(mydata['CaptureDateTime'])))
 
 				sock.close()
 
@@ -242,7 +243,7 @@ def consolidationThread():
 		time.sleep(10)
 
 
-def parakeet_upload():
+def parakeet_upload(ts=1):
 	global parakeet_url
 	global mydata
 	if parakeet_url != "":
@@ -260,7 +261,7 @@ def parakeet_upload():
 					 + "&zi=" + mydata['TransmitterId']
 					 + "&db=" + mydata['BatteryLife']
 					 + "&pc=" + parakeet_passcode
-					 + "&ts=" + "1"
+					 + "&ts=" + str(ts)
 					 )
 			c.setopt(c.TIMEOUT, 20)
 			c.setopt(c.USERAGENT, "usb-wixel")
