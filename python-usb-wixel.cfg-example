@@ -1,0 +1,22 @@
+# Example configuration file. Any options left blank will take defaults
+# from the script itself.
+
+[main]
+
+# Interfaces to bind on - blank = all - Port number to answer xDrip on
+HOST=
+PORT=50005
+
+# Other hosts running same script to consoldate in to one
+# eg: remoteHosts= 127.0.0.1:50015,192.168.1.123:50005
+remoteHosts=
+
+
+# Parakeet Google App Engine URL to sync to if you are using that
+# eg:  https://parakeet-receiver.appspot.com/receiver.cgi
+parakeet_url=
+parakeet_passcode = 12345
+
+
+# Log file location
+DEFAULT_LOG_FILE=python-usb-wixel.log
