@@ -7,7 +7,7 @@
 HOST=
 PORT=50005
 
-# Other hosts running same script to consoldate in to one
+# Other hosts running same script to consolidate in to one
 # eg: remoteHosts= 127.0.0.1:50015,192.168.1.123:50005
 remoteHosts=
 
