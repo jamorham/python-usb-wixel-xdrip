@@ -20,3 +20,8 @@ parakeet_passcode = 12345
 
 # Log file location
 DEFAULT_LOG_FILE=python-usb-wixel.log
+
+# Uncomment line below to use the internal serial port on raspberry pi
+# Don't do this if you are using the Wixel on the USB port!
+
+#use_raspberry_pi_internal_serial_port=yes

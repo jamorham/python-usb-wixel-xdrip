@@ -89,7 +89,7 @@ if (os.path.isfile(config_path)):
 	parakeet_url = config.get('main', 'parakeet_url').strip()
 	parakeet_passcode = config.get('main', 'parakeet_passcode').strip()
 	try:
-		use_raspberry_pi_serial_port = config.getboolean('main', 'use_raspberry_pi_internal_serial_port')
+		use_raspberry_pi_internal_serial_port = config.getboolean('main', 'use_raspberry_pi_internal_serial_port')
 	except:
 		use_raspberry_pi_internal_serial_port = False
 	DEFAULT_LOG_FILE = config.get('main', 'DEFAULT_LOG_FILE').strip()
