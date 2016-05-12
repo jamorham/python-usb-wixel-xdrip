@@ -1,5 +1,7 @@
 #How to set up a Raspberry Pi Wixel receiver#
 
+>Based on using the Raspbian distribution.
+
 First login to your Pi and set it up with a .local name, see: [assigning a .local address](http://www.howtogeek.com/167190/how-and-why-to-assign-the-.local-domain-to-your-raspberry-pi/)
 
 Make sure packages are installed:
