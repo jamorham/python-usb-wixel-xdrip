@@ -260,6 +260,7 @@ def parakeet_upload(ts=1):
 					 + "&lf=" + mydata['FilteredValue']
 					 + "&zi=" + mydata['TransmitterId']
 					 + "&db=" + mydata['BatteryLife']
+					 + "&gl=" + "-15,-15"
 					 + "&pc=" + parakeet_passcode
 					 + "&ts=" + str(ts)
 					 )
