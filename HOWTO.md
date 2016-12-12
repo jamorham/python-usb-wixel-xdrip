@@ -25,5 +25,7 @@ and a flashing yellow light on the Wixel until it gets the first dex signal.
 
 Within [xDrip+](https://jamorham.github.io/#xdrip-plus) select `WiFi Wixel` in `Data source` settings section and add `raspberry.local:50005` in to `List of Receivers` or whatever your Raspberry Pi hostname is.
 
+Using `raspberry.local:50005` may not work on all android devices, if it doesn't try instead using the IP address, eg `192.168.5.123:50005` in the `List of Receivers` replacing with the real ip address.
+
 After reboot you can check the script is running with:
 `sudo screen -r wixel`
